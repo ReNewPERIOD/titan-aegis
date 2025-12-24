@@ -4,7 +4,7 @@ import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } fro
 import { Activity, TrendingUp, TrendingDown, Zap, Shield, AlertTriangle } from 'lucide-react';
 import './App.css';
 
-const API_URL = 'http://127.0.0.1:8000';
+const API_URL = 'https://titan-backend-rl21.onrender.com';
 
 function App() {
   const [market, setMarket] = useState(null);
