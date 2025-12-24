@@ -1,191 +1,159 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
 import { Activity, TrendingUp, TrendingDown, Zap, Shield, AlertTriangle } from 'lucide-react';
 import './App.css';
 
-const API_URL = 'https://titan-backend-rl21.onrender.com';
+// --- CẤU HÌNH API (Đã tự động lấy link từ bước trước) ---
+const API_URL = 'https://titan-backend-rl21.onrender.com'; // Thay bằng link Render của bạn nếu cần
 
 function App() {
   const [market, setMarket] = useState(null);
   const [simPaths, setSimPaths] = useState([]);
-  const [meanPath, setMeanPath] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
 
-  // Hàm lấy dữ liệu từ Python Server
   const fetchData = async () => {
     try {
-      // 1. Lấy dữ liệu thị trường
-      const marketRes = await axios.get(`${API_URL}/market-data`);
+      const [marketRes, simRes, logsRes] = await Promise.all([
+        axios.get(`${API_URL}/market-data`),
+        axios.get(`${API_URL}/simulation-paths`),
+        axios.get(`${API_URL}/trade-logs`)
+      ]);
+
       setMarket(marketRes.data);
 
-      // 2. Lấy dữ liệu biểu đồ Monte Carlo
-      const simRes = await axios.get(`${API_URL}/simulation-paths`);
-      // Chuyển đổi dữ liệu mảng thành format Recharts hiểu được
-      const formattedPaths = simRes.data.paths[0].map((_, index) => {
-        let point = { index };
-        simRes.data.paths.forEach((path, pathIndex) => {
-          point[`path_${pathIndex}`] = path[index];
+      // Xử lý dữ liệu biểu đồ
+      if (simRes.data.paths) {
+        const formattedPaths = simRes.data.paths[0].map((_, index) => {
+          let point = { index };
+          simRes.data.paths.forEach((path, i) => { point[`path_${i}`] = path[index]; });
+          point.mean = simRes.data.mean_path[index];
+          return point;
         });
-        point.mean = simRes.data.mean_path[index];
-        return point;
-      });
-      setSimPaths(formattedPaths);
-      setMeanPath(simRes.data.mean_path);
-
-      // 3. Lấy lịch sử lệnh
-      const logsRes = await axios.get(`${API_URL}/trade-logs`);
+        setSimPaths(formattedPaths);
+      }
       setLogs(logsRes.data);
-
-      setError(false);
       setLoading(false);
     } catch (err) {
-      console.error("Lỗi kết nối:", err);
-      setError(true);
+      console.error("Kết nối thất bại:", err);
     }
   };
 
-  // Tự động quét mỗi 2 giây
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 2000);
+    const interval = setInterval(fetchData, 3000); // 3s cập nhật 1 lần cho đỡ lag
     return () => clearInterval(interval);
   }, []);
 
-  if (loading && !market) return <div className="loading-screen">INITIALIZING TITAN PROTOCOL...</div>;
+  if (loading) return <div className="loading-screen">CONNECTING TO TITAN SERVER...</div>;
 
   return (
     <div className="dashboard-container">
-      {/* HEADER */}
+      {/* HEADER COMPACT */}
       <header className="header">
         <div className="logo-section">
-          <Shield className="logo-icon" size={32} />
+          <Shield className="logo-icon" size={28} />
           <div>
-            <h1>TITAN AEGIS V7</h1>
-            <span className="subtitle">AI HEDGE FUND / QUANT CORE</span>
+            <h1>TITAN AEGIS <span style={{color:'var(--neon-yellow)'}}>V7</span></h1>
           </div>
         </div>
-        <div className={`status-badge ${error ? 'offline' : 'online'}`}>
-          <div className="dot"></div>
-          {error ? 'CONNECTION LOST' : 'SYSTEM ONLINE'}
+        <div className="status-badge online">
+          <div className="dot"></div> SYSTEM ONLINE
         </div>
       </header>
 
-      {/* STATS GRID */}
+      {/* STATS ROW */}
       {market && (
         <div className="stats-grid">
-          <div className="card stat-card">
-            <div className="stat-label">BITCOIN PRICE</div>
-            <div className="stat-value price">${market.price.toLocaleString()}</div>
+          <div className="stat-card">
+            <div className="label">BITCOIN PRICE</div>
+            <div className="value glow">${market.price.toLocaleString()}</div>
           </div>
           
-          <div className="card stat-card">
-            <div className="stat-label">AI CONFIDENCE (WINRATE)</div>
-            <div className={`stat-value ${market.winrate > 60 ? 'text-green' : 'text-red'}`}>
+          <div className="stat-card">
+            <div className="label">AI WINRATE</div>
+            <div className={`value ${market.winrate > 60 ? 'text-green' : 'text-red'}`}>
               {market.winrate}%
             </div>
-            <div className="progress-bar">
-              <div 
-                className="progress-fill" 
-                style={{ width: `${market.winrate}%`, backgroundColor: market.winrate > 60 ? '#00ff41' : '#ff003c' }}
-              ></div>
+            <div className="progress-bg"><div className="progress-fill" style={{width: `${market.winrate}%`, background: market.winrate > 60 ? '#00ff41' : '#ff003c'}}></div></div>
+          </div>
+
+          <div className="stat-card">
+            <div className="label">TREND</div>
+            <div className={`value flex-row ${market.trend === 'UP' ? 'text-green' : 'text-red'}`}>
+              {market.trend === 'UP' ? <TrendingUp /> : <TrendingDown />} 
+              {market.trend}
             </div>
           </div>
 
-          <div className="card stat-card">
-            <div className="stat-label">TREND BIAS</div>
-            <div className={`stat-value flex-center ${market.trend === 'UP' ? 'text-green' : 'text-red'}`}>
-              {market.trend === 'UP' ? <TrendingUp size={30} /> : <TrendingDown size={30} />}
-              <span style={{marginLeft: 10}}>{market.trend}</span>
-            </div>
-          </div>
-
-          <div className="card stat-card">
-            <div className="stat-label">VOLATILITY (ATR)</div>
-            <div className="stat-value text-yellow">
-              <Activity size={24} style={{display:'inline', marginRight:5}}/>
-              {market.atr.toFixed(2)}
-            </div>
+          <div className="stat-card">
+            <div className="label">VOLATILITY (ATR)</div>
+            <div className="value text-yellow"><Activity size={20}/> {market.atr.toFixed(2)}</div>
           </div>
         </div>
       )}
 
-      {/* MAIN CONTENT */}
+      {/* MAIN CONTENT SPLIT */}
       <div className="main-layout">
-        {/* LEFT: ORACLE CHART */}
-        <div className="card chart-section">
-          <div className="card-header">
-            <Zap size={20} color="#ffd700"/>
-            <h3>THE ORACLE (MONTE CARLO PREDICTION)</h3>
+        {/* CHART SECTION */}
+        <div className="panel chart-panel">
+          <div className="panel-header">
+            <Zap size={18} color="#ffd700"/> THE ORACLE PREDICTION
           </div>
-          <div className="chart-wrapper">
+          <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={simPaths}>
-                {/* Vẽ 50 đường mờ ảo */}
-                {Array.from({ length: 50 }).map((_, i) => (
-                  <Line 
-                    key={i} 
-                    type="monotone" 
-                    dataKey={`path_${i}`} 
-                    stroke="#00ff41" 
-                    strokeOpacity={0.05} 
-                    dot={false} 
-                    strokeWidth={1}
+                <Tooltip 
+                   contentStyle={{backgroundColor: '#000', border: '1px solid #333'}} 
+                   itemStyle={{color: '#fff'}}
+                   labelStyle={{display:'none'}}
+                   filterNull={true}
+                />
+                {/* 50 Đường mờ (Tắt dot, tắt activeDot để không bị lỗi cột trắng) */}
+                {Array.from({ length: 20 }).map((_, i) => (
+                  <Line key={i} type="monotone" dataKey={`path_${i}`} 
+                    stroke="#00ff41" strokeOpacity={0.08} dot={false} activeDot={false} strokeWidth={1}
+                    isAnimationActive={false} // Tắt animation để nhẹ máy
                   />
                 ))}
-                {/* Đường trung bình màu vàng */}
-                <Line type="monotone" dataKey="mean" stroke="#ffd700" strokeWidth={3} dot={false} />
+                {/* Đường chính (Vàng) */}
+                <Line type="monotone" dataKey="mean" stroke="#ffd700" strokeWidth={2} dot={false} activeDot={{r: 6, fill: '#ffd700'}} />
                 
                 {market && (
                   <>
-                    <ReferenceLine y={market.tp} stroke="#00ff41" strokeDasharray="3 3" label="TP" />
-                    <ReferenceLine y={market.sl} stroke="#ff003c" strokeDasharray="3 3" label="SL" />
+                    <ReferenceLine y={market.tp} stroke="#00ff41" strokeDasharray="3 3" label={{position: 'right', value:'TP', fill:'#00ff41', fontSize:10}} />
+                    <ReferenceLine y={market.sl} stroke="#ff003c" strokeDasharray="3 3" label={{position: 'right', value:'SL', fill:'#ff003c', fontSize:10}} />
                   </>
                 )}
-                <XAxis dataKey="index" hide />
                 <YAxis domain={['auto', 'auto']} hide />
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <div className="chart-legend">
-            <span style={{color: '#ffd700'}}>— Mean Path</span>
-            <span style={{color: '#00ff41', opacity: 0.5}}>— Monte Carlo Simulations</span>
-          </div>
         </div>
 
-        {/* BOTTOM: TRADE LOGS */}
-        <div className="card logs-section">
-          <div className="card-header">
-            <AlertTriangle size={20} />
-            <h3>EXECUTION LOGS</h3>
+        {/* LOGS SECTION */}
+        <div className="panel logs-panel">
+          <div className="panel-header">
+            <AlertTriangle size={18} /> EXECUTION LOGS
           </div>
-          <div className="table-container">
+          <div className="logs-list">
             <table>
               <thead>
                 <tr>
                   <th>TIME</th>
-                  <th>PAIR</th>
                   <th>ACTION</th>
                   <th>PRICE</th>
                   <th>SCORE</th>
-                  <th>STATUS</th>
                 </tr>
               </thead>
               <tbody>
                 {logs.map((log, index) => (
-                  <tr key={index} className="log-row">
-                    <td>{log.Timestamp.split(' ')[1]}</td>
-                    <td>{log.Symbol}</td>
+                  <tr key={index}>
+                    <td className="text-gray">{log.Timestamp.split(' ')[1]}</td>
                     <td className={log.Action === 'LONG' ? 'text-green' : 'text-red'}>{log.Action}</td>
-                    <td>${log.Price}</td>
-                    <td>
-                      <span className={`score-badge ${log.Score >= 14 ? 'high' : 'low'}`}>
-                        {log.Score}/15
-                      </span>
-                    </td>
-                    <td>EXECUTED</td>
+                    <td>${Number(log.Price).toFixed(0)}</td>
+                    <td><span className={`badge ${log.Score >= 14 ? 'high' : 'low'}`}>{log.Score}</span></td>
                   </tr>
                 ))}
               </tbody>
