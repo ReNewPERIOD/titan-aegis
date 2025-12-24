@@ -11,7 +11,8 @@ class BinanceFeed:
         # Khởi tạo sàn Binance (chế độ không cần API Key để lấy giá - Public Data)
         self.exchange = ccxt.binance({'enableRateLimit': True})
     
-  """
+    def get_historical_volatility(self, days=30):
+        """
         [NÂNG CẤP] Trả về cả biểu đồ hourly VÀ các chỉ số thống kê (Stats)
         """
         try:
