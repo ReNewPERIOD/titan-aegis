@@ -10,6 +10,33 @@ class BinanceFeed:
         self.timeframe = timeframe
         # Khởi tạo sàn Binance (chế độ không cần API Key để lấy giá - Public Data)
         self.exchange = ccxt.binance({'enableRateLimit': True})
+    
+    def get_historical_volatility(self, days=30):
+        """
+        Phân tích biến động giá theo khung giờ trong 30 ngày qua
+        Để vẽ biểu đồ 'Volatility by Time Slot' như Pro
+        """
+        try:
+            # Lấy nến 1 giờ (1h) trong 30 ngày
+            limit = 24 * days
+            ohlcv = self.exchange.fetch_ohlcv(self.symbol, '1h', limit=limit)
+            
+            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            df['hour'] = df['timestamp'].dt.hour
+            
+            # Tính biến động (High - Low) của từng cây nến
+            df['volatility'] = (df['high'] - df['low']) / df['open'] * 100 # Ra %
+            
+            # Gom nhóm theo giờ (0h - 23h) và tính trung bình
+            hourly_stats = df.groupby('hour')['volatility'].mean().reset_index()
+            
+            # Chuyển thành dạng list cho Frontend dễ vẽ
+            return hourly_stats.to_dict(orient='records')
+            
+        except Exception as e:
+            print(f"❌ Lỗi lấy lịch sử: {e}")
+            return []
 
     def get_market_snapshot(self):
         """

@@ -65,8 +65,9 @@ def get_simulation_paths():
     if not data: return {"error": "No Data"}
     
     steps = 60
-    paths = 20 # Gửi 50 đường thôi cho nhẹ JSON
+    paths = 100 # Gửi 50 đường thôi cho nhẹ JSON
     
+
     # Tạo ngẫu nhiên
     random_walks = np.random.normal(data['bias'], data['volatility'], (steps, paths))
     price_paths = data['price'] * (1 + random_walks).cumprod(axis=0)
@@ -77,6 +78,17 @@ def get_simulation_paths():
         "mean_path": np.mean(price_paths, axis=1).tolist()
     }
 
+# ... (các import cũ giữ nguyên)
+
+@app.get("/volatility-analysis")
+def get_volatility_analysis():
+    """API trả về dữ liệu phân tích biến động theo giờ"""
+    try:
+        data = feed.get_historical_volatility(days=30)
+        return data # Trả về list: [{'hour': 0, 'volatility': 0.5}, ...]
+    except Exception as e:
+        return {"error": str(e)}
+        
 @app.get("/trade-logs")
 def get_trade_logs():
     """Đọc file CSV trả về lịch sử lệnh"""

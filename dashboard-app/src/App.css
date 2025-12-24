@@ -19,15 +19,57 @@ body {
 }
 
 /* LAYOUT TỔNG: Chia màn hình thành Header (tự động) và Phần còn lại (flex 1) */
+/* Layout kiểu Dashboard App: Sidebar trái + Content phải */
 .dashboard-container {
+  display: grid;
+  grid-template-columns: 250px 1fr; /* Sidebar 250px, còn lại là Content */
+  height: 100vh;
+  background: #0b0e11; /* Màu nền xám xanh đậm giống ảnh mẫu */
+}
+
+/* SIDEBAR MỚI */
+.sidebar {
+  background: #151a21;
+  border-right: 1px solid #2a2e35;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  padding: 15px;
-  box-sizing: border-box;
-  max-width: 1920px;
-  margin: 0 auto;
+  gap: 20px;
 }
+
+.sidebar h2 {
+  font-size: 0.9rem;
+  color: #fff;
+  opacity: 0.7;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-input {
+  background: #0b0e11;
+  border: 1px solid #333;
+  color: #fff;
+  padding: 8px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono';
+}
+
+/* CONTENT AREA */
+.content-area {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* ... Giữ lại các style của card, panel, chart cũ ... */
 
 /* HEADER */
 .header {
