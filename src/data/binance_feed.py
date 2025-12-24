@@ -11,32 +11,48 @@ class BinanceFeed:
         # Khởi tạo sàn Binance (chế độ không cần API Key để lấy giá - Public Data)
         self.exchange = ccxt.binance({'enableRateLimit': True})
     
-    def get_historical_volatility(self, days=30):
-        """
-        Phân tích biến động giá theo khung giờ trong 30 ngày qua
-        Để vẽ biểu đồ 'Volatility by Time Slot' như Pro
+  """
+        [NÂNG CẤP] Trả về cả biểu đồ hourly VÀ các chỉ số thống kê (Stats)
         """
         try:
-            # Lấy nến 1 giờ (1h) trong 30 ngày
             limit = 24 * days
             ohlcv = self.exchange.fetch_ohlcv(self.symbol, '1h', limit=limit)
-            
+            if not ohlcv: return {}
+
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df['hour'] = df['timestamp'].dt.hour
+            df['hour'] = df['timestamp'].dt.hour + 7 # Giờ Việt Nam
+            df['hour'] = df['hour'].apply(lambda x: x - 24 if x >= 24 else x)
             
-            # Tính biến động (High - Low) của từng cây nến
-            df['volatility'] = (df['high'] - df['low']) / df['open'] * 100 # Ra %
+            # Tính biến động % (High - Low)
+            df['volatility'] = (df['high'] - df['low']) / df['open'] * 100 
             
-            # Gom nhóm theo giờ (0h - 23h) và tính trung bình
-            hourly_stats = df.groupby('hour')['volatility'].mean().reset_index()
+            # 1. TÍNH CÁC CHỈ SỐ THỐNG KÊ (STATS)
+            avg_vol = df['volatility'].mean()            # Biến động TB mỗi giờ
+            peak_vol = df['volatility'].max()            # Cây nến biến động mạnh nhất lịch sử
             
-            # Chuyển thành dạng list cho Frontend dễ vẽ
-            return hourly_stats.to_dict(orient='records')
+            # Tìm giờ biến động mạnh nhất (Peak Time)
+            hourly_group = df.groupby('hour')['volatility'].mean()
+            best_hour = hourly_group.idxmax()            # Giờ nào biến động mạnh nhất
+            best_hour_vol = hourly_group.max()           # Giá trị biến động của giờ đó
+            
+            # 2. DỮ LIỆU BIỂU ĐỒ (CHART)
+            hourly_stats = hourly_group.reset_index()
+            hourly_stats['volatility'] = hourly_stats['volatility'].round(2)
+            
+            return {
+                "chart": hourly_stats.to_dict(orient='records'),
+                "stats": {
+                    "avg_intraday": round(avg_vol, 2),
+                    "peak_intraday": round(peak_vol, 2),
+                    "best_hour": f"{best_hour}:00",
+                    "best_hour_vol": round(best_hour_vol, 2)
+                }
+            }
             
         except Exception as e:
-            print(f"❌ Lỗi lấy lịch sử: {e}")
-            return []
+            print(f"❌ Lỗi: {e}")
+            return {}
 
     def get_market_snapshot(self):
         """
