@@ -233,3 +233,36 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--te
   color: var(--accent-green); letter-spacing: 3px; animation: blink 1s infinite; font-family: 'JetBrains Mono';
 }
 @keyframes blink { 50% { opacity: 0.5; } }
+/* --- STRATEGY PLANNER STYLES --- */
+.strategy-form { display: flex; flex-direction: column; gap: 15px; }
+
+.input-row { display: flex; justify-content: space-between; gap: 10px; }
+.input-group { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.input-group label { font-size: 0.7rem; color: #94a3b8; }
+.input-group input { 
+  background: #0f172a; border: 1px solid #334155; 
+  color: #fff; padding: 8px; border-radius: 4px; font-family: 'JetBrains Mono'; font-size: 0.8rem;
+  width: 100%; box-sizing: border-box;
+}
+
+/* Toggle Switch xịn xò */
+.toggle-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: #cbd5e1; }
+.switch { position: relative; display: inline-block; width: 34px; height: 18px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #334155; transition: .4s; border-radius: 34px; }
+.slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+input:checked + .slider { background-color: #00ff41; }
+input:checked + .slider:before { transform: translateX(16px); }
+
+/* Plan Result Box */
+.plan-result { 
+  background: rgba(0,0,0,0.3); border: 1px dashed #4ade80; 
+  padding: 10px; border-radius: 6px; margin-top: 10px;
+}
+.plan-row { display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px; }
+.plan-val { font-family: 'JetBrains Mono'; font-weight: bold; color: #4ade80; }
+
+.target-progress { margin-top: 10px; }
+.progress-label { display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8; margin-bottom: 3px; }
+.p-bar-bg { width: 100%; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
+.p-bar-fill { height: 100%; background: linear-gradient(90deg, #00ff41, #facc15); width: 0%; transition: width 0.5s; }
