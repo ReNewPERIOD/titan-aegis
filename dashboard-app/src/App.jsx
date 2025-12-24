@@ -11,9 +11,12 @@ function App() {
   const [simPaths, setSimPaths] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  // Khởi tạo đúng cấu trúc mới
   const [volatilityData, setVolatilityData] = useState({ chart: [], stats: null });
+  
+  // --- STATE MỚI: Dòng suy nghĩ của AI ---
+  const [aiThoughts, setAiThoughts] = useState([]);
 
+  // Hàm lấy dữ liệu từ Server
   const fetchData = async () => {
     try {
       const [marketRes, simRes, logsRes, volRes] = await Promise.all([
@@ -36,7 +39,6 @@ function App() {
       }
       setLogs(logsRes.data);
       
-      // Xử lý dữ liệu Volatility (Quan trọng)
       if (volRes.data && volRes.data.stats) {
         setVolatilityData(volRes.data);
       }
@@ -47,9 +49,41 @@ function App() {
     }
   };
 
+  // Tự động cập nhật dữ liệu mỗi 3 giây
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- EFFECT MỚI: GIẢ LẬP SUY NGHĨ CỦA AI (Chạy chữ) ---
+  useEffect(() => {
+    const messages = [
+      "Scanning market microstructure...",
+      "Analyzing volume delta divergence...",
+      "Calculated Fibonacci retracement at 0.618",
+      "Checking correlation with SPX500...",
+      "Whale wallet movement detected...",
+      "Sentiment analysis: NEUTRAL-BULLISH",
+      "Optimizing stop-loss parameters...",
+      "Fetching latest funding rates...",
+      "Resistance detected at $88,500",
+      "Executing Monte Carlo simulation (n=1000)...",
+      "Order book imbalance detected on Binance..."
+    ];
+
+    const interval = setInterval(() => {
+      const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+      const timestamp = new Date().toLocaleTimeString('en-US', {hour12: false});
+      
+      setAiThoughts(prev => {
+        // Tạo log mới với màu sắc ngẫu nhiên để nhìn cho nguy hiểm
+        const type = Math.random() > 0.8 ? 'highlight' : (Math.random() > 0.9 ? 'danger' : 'normal');
+        const newLog = { time: timestamp, msg: randomMsg, type: type };
+        return [newLog, ...prev].slice(0, 15); // Chỉ giữ 15 dòng mới nhất
+      });
+    }, 2000); // 2 giây hiện 1 dòng
+
     return () => clearInterval(interval);
   }, []);
 
@@ -57,7 +91,7 @@ function App() {
 
   return (
     <div className="dashboard-container">
-      {/* SIDEBAR TRÁI */}
+      {/* --- CỘT 1: SIDEBAR TRÁI (CONFIG) --- */}
       <aside className="sidebar">
         <div className="logo-section">
           <Shield color="#00ff41"/> <span>TITAN OS</span>
@@ -93,7 +127,7 @@ function App() {
         </div>
       </aside>
       
-      {/* NỘI DUNG CHÍNH (Phải) */}
+      {/* --- CỘT 2: NỘI DUNG CHÍNH (DATA CENTER) --- */}
       <main className="content-area">
         {/* HEADER */}
         <header className="header">
@@ -111,7 +145,6 @@ function App() {
         {/* STATS ROW */}
         {market && (
           <div className="stats-grid">
-            {/* Thẻ 1: Giá hiện tại */}
             <div className="stat-card pro-card">
               <div className="label">CURRENT PRICE</div>
               <div className="value" style={{color: '#fff'}}>
@@ -120,7 +153,6 @@ function App() {
               <div className="sub-label">BTC/USDT</div>
             </div>
 
-            {/* Thẻ 2: Average Intraday */}
             <div className="stat-card pro-card">
               <div className="label">AVG INTRADAY %</div>
               <div className="value text-blue">
@@ -129,7 +161,6 @@ function App() {
               <div className="sub-label">Volatility Score</div>
             </div>
 
-            {/* Thẻ 3: Peak Volatility */}
             <div className="stat-card pro-card">
               <div className="label">PEAK INTRADAY</div>
               <div className="value text-purple">
@@ -138,7 +169,6 @@ function App() {
               <div className="sub-label">Max 1H Range</div>
             </div>
 
-            {/* Thẻ 4: Best Trading Time */}
             <div className="stat-card pro-card">
               <div className="label">PEAK TIME</div>
               <div className="value text-yellow">
@@ -147,7 +177,6 @@ function App() {
               <div className="sub-label">Best Volatility</div>
             </div>
 
-            {/* Thẻ 5: AI Winrate */}
             <div className="stat-card pro-card">
               <div className="label">AI WINRATE</div>
               <div className={`value ${market && market.winrate > 60 ? 'text-green' : 'text-red'}`}>
@@ -174,16 +203,13 @@ function App() {
                      labelStyle={{display:'none'}}
                      filterNull={true}
                   />
-                  {/* 20 Đường mờ */}
                   {Array.from({ length: 20 }).map((_, i) => (
                     <Line key={i} type="monotone" dataKey={`path_${i}`} 
                       stroke="#00ff41" strokeOpacity={0.08} dot={false} activeDot={false} strokeWidth={1}
                       isAnimationActive={false}
                     />
                   ))}
-                  {/* Đường chính (Vàng) */}
                   <Line type="monotone" dataKey="mean" stroke="#ffd700" strokeWidth={2} dot={false} activeDot={{r: 6, fill: '#ffd700'}} />
-                  
                   {market && (
                     <>
                       <ReferenceLine y={market.tp} stroke="#00ff41" strokeDasharray="3 3" label={{position: 'right', value:'TP', fill:'#00ff41', fontSize:10}} />
@@ -233,7 +259,6 @@ function App() {
           </div>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
-            {/* SỬA LỖI: Dùng đúng volatilityData.chart */}
             <BarChart data={volatilityData.chart || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
                 <XAxis 
@@ -246,7 +271,6 @@ function App() {
                   contentStyle={{backgroundColor: '#000', border: '1px solid #333', color: '#fff'}}
                 />
                 <Bar dataKey="volatility" name="Biến động TB (%)">
-                  {/* SỬA LỖI: Map vào mảng chart bên trong, không map object cha */}
                   {(volatilityData.chart || []).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.volatility > 0.5 ? '#ff003c' : '#00ff41'} />
                   ))}
@@ -255,8 +279,50 @@ function App() {
             </ResponsiveContainer>
           </div>
         </div>
-
       </main>
+
+      {/* --- CỘT 3: RIGHT SIDEBAR (AI & ORDER BOOK) --- */}
+      <aside className="right-sidebar">
+        
+        {/* PHẦN 1: AI THOUGHT STREAM */}
+        <div className="right-panel" style={{flex: 2}}>
+          <div className="terminal-header">
+            <span>⚡ TITAN CORTEX AI</span>
+            <span style={{fontSize: 10, color: '#666'}}>v7.0.1</span>
+          </div>
+          <div className="terminal-content">
+            {aiThoughts.map((log, i) => (
+              <div key={i} className={`ai-log ${log.type}`}>
+                <span style={{opacity:0.5, fontSize:10, marginRight:5}}>[{log.time}]</span>
+                {log.msg}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* PHẦN 2: MARKET DEPTH (Order Book ảo) */}
+        <div className="right-panel" style={{flex: 1, borderTop: '1px solid #333'}}>
+           <div className="terminal-header">
+            <span>🌊 MARKET DEPTH</span>
+          </div>
+          <div className="order-book">
+             <div className="ob-row"><span className="ask">87,240.00</span> <span>0.45 BTC</span></div>
+             <div className="ob-bar"><div className="ob-fill" style={{width: '40%', background: '#ff003c'}}></div></div>
+             
+             <div className="ob-row"><span className="ask">87,235.50</span> <span>1.20 BTC</span></div>
+             <div className="ob-bar"><div className="ob-fill" style={{width: '80%', background: '#ff003c'}}></div></div>
+             
+             <div style={{margin: '10px 0', textAlign:'center', color:'#888', fontSize:10}}>--- SPREAD ---</div>
+
+             <div className="ob-row"><span className="bid">87,230.00</span> <span>2.50 BTC</span></div>
+             <div className="ob-bar"><div className="ob-fill" style={{width: '90%', background: '#00ff41'}}></div></div>
+
+             <div className="ob-row"><span className="bid">87,225.00</span> <span>0.80 BTC</span></div>
+             <div className="ob-bar"><div className="ob-fill" style={{width: '30%', background: '#00ff41'}}></div></div>
+          </div>
+        </div>
+
+      </aside>
     </div>
   );
 }
