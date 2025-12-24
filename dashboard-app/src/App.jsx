@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-// SỬA 1: Gộp tất cả import của Recharts vào 1 dòng duy nhất
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, CartesianGrid } from 'recharts';
 import { Activity, TrendingUp, TrendingDown, Zap, Shield, AlertTriangle } from 'lucide-react';
 import './App.css';
@@ -12,7 +11,8 @@ function App() {
   const [simPaths, setSimPaths] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [volatilityData, setVolatilityData] = useState([]);
+  // Khởi tạo đúng cấu trúc mới
+  const [volatilityData, setVolatilityData] = useState({ chart: [], stats: null });
 
   const fetchData = async () => {
     try {
@@ -35,7 +35,12 @@ function App() {
         setSimPaths(formattedPaths);
       }
       setLogs(logsRes.data);
-      setVolatilityData(volRes.data);
+      
+      // Xử lý dữ liệu Volatility (Quan trọng)
+      if (volRes.data && volRes.data.stats) {
+        setVolatilityData(volRes.data);
+      }
+      
       setLoading(false);
     } catch (err) {
       console.error("Kết nối thất bại:", err);
@@ -98,7 +103,6 @@ function App() {
               <h1>TITAN AEGIS <span style={{color:'var(--neon-yellow)'}}>V7</span></h1>
             </div>
           </div>
-          {/* SỬA 2: Đóng thẻ div status-badge đúng chỗ, không nhét chart vào đây */}
           <div className="status-badge online">
             <div className="dot"></div> SYSTEM ONLINE
           </div>
@@ -107,30 +111,49 @@ function App() {
         {/* STATS ROW */}
         {market && (
           <div className="stats-grid">
-            <div className="stat-card">
-              <div className="label">BITCOIN PRICE</div>
-              <div className="value glow">${market.price.toLocaleString()}</div>
+            {/* Thẻ 1: Giá hiện tại */}
+            <div className="stat-card pro-card">
+              <div className="label">CURRENT PRICE</div>
+              <div className="value" style={{color: '#fff'}}>
+                 ${market ? market.price.toLocaleString() : '---'}
+              </div>
+              <div className="sub-label">BTC/USDT</div>
             </div>
-            
-            <div className="stat-card">
+
+            {/* Thẻ 2: Average Intraday */}
+            <div className="stat-card pro-card">
+              <div className="label">AVG INTRADAY %</div>
+              <div className="value text-blue">
+                 {volatilityData.stats ? volatilityData.stats.avg_intraday : '-'}%
+              </div>
+              <div className="sub-label">Volatility Score</div>
+            </div>
+
+            {/* Thẻ 3: Peak Volatility */}
+            <div className="stat-card pro-card">
+              <div className="label">PEAK INTRADAY</div>
+              <div className="value text-purple">
+                 {volatilityData.stats ? volatilityData.stats.peak_intraday : '-'}%
+              </div>
+              <div className="sub-label">Max 1H Range</div>
+            </div>
+
+            {/* Thẻ 4: Best Trading Time */}
+            <div className="stat-card pro-card">
+              <div className="label">PEAK TIME</div>
+              <div className="value text-yellow">
+                 {volatilityData.stats ? volatilityData.stats.best_hour : '--:--'}
+              </div>
+              <div className="sub-label">Best Volatility</div>
+            </div>
+
+            {/* Thẻ 5: AI Winrate */}
+            <div className="stat-card pro-card">
               <div className="label">AI WINRATE</div>
-              <div className={`value ${market.winrate > 60 ? 'text-green' : 'text-red'}`}>
-                {market.winrate}%
+              <div className={`value ${market && market.winrate > 60 ? 'text-green' : 'text-red'}`}>
+                 {market ? market.winrate : '-'}%
               </div>
-              <div className="progress-bg"><div className="progress-fill" style={{width: `${market.winrate}%`, background: market.winrate > 60 ? '#00ff41' : '#ff003c'}}></div></div>
-            </div>
-
-            <div className="stat-card">
-              <div className="label">TREND</div>
-              <div className={`value flex-row ${market.trend === 'UP' ? 'text-green' : 'text-red'}`}>
-                {market.trend === 'UP' ? <TrendingUp /> : <TrendingDown />} 
-                {market.trend}
-              </div>
-            </div>
-
-            <div className="stat-card">
-              <div className="label">VOLATILITY (ATR)</div>
-              <div className="value text-yellow"><Activity size={20}/> {market.atr.toFixed(2)}</div>
+              <div className="sub-label">Model Confidence</div>
             </div>
           </div>
         )}
@@ -203,14 +226,15 @@ function App() {
           </div>
         </div>
 
-        {/* SỬA 3: Đặt VOLATILITY CHART ở đây (Dưới cùng, bên ngoài header) */}
+        {/* VOLATILITY CHART */}
         <div className="panel" style={{marginTop: '15px', height: '250px', flexShrink: 0}}>
           <div className="panel-header">
             <Activity size={18} /> MARKET VOLATILITY BY HOUR (UTC)
           </div>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={volatilityData}>
+            {/* SỬA LỖI: Dùng đúng volatilityData.chart */}
+            <BarChart data={volatilityData.chart || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
                 <XAxis 
                   dataKey="hour" 
@@ -222,7 +246,8 @@ function App() {
                   contentStyle={{backgroundColor: '#000', border: '1px solid #333', color: '#fff'}}
                 />
                 <Bar dataKey="volatility" name="Biến động TB (%)">
-                  {volatilityData.map((entry, index) => (
+                  {/* SỬA LỖI: Map vào mảng chart bên trong, không map object cha */}
+                  {(volatilityData.chart || []).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.volatility > 0.5 ? '#ff003c' : '#00ff41'} />
                   ))}
                 </Bar>
