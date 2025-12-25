@@ -31,32 +31,9 @@ def read_root():
     return {"status": "Titan Aegis System Online"}
 
 @app.get("/market-data")
-def get_market_data():
-    """Trả về giá, ATR, Trend hiện tại"""
-    data = feed.get_market_snapshot()
-    if data:
-        # Tính toán nhanh Winrate để Frontend hiển thị luôn
-        if data['trend'] == "UP":
-            tp = data['price'] + (data['atr_value'] * 2)
-            sl = data['price'] - (data['atr_value'] * 1.5)
-        else:
-            tp = data['price'] - (data['atr_value'] * 2)
-            sl = data['price'] + (data['atr_value'] * 1.5)
-            
-        sim_res = engine.run(data['price'], data['volatility'], data['bias'], tp, sl)
-        
-        # Gộp kết quả lại trả về 1 cục JSON
-        response = {
-            "price": data['price'],
-            "atr": data['atr_value'],
-            "trend": data['trend'],
-            "bias": data['bias'],
-            "winrate": sim_res['win_probability'],
-            "tp": tp,
-            "sl": sl
-        }
-        return response
-    return {"error": "No Data"}
+def market_data(tf: str = "1h"): # Mặc định là 1h nếu không gửi gì
+    # Map từ user (15 Minute) sang code Binance (15m)
+    return feed.get_market_snapshot(timeframe=tf)
 
 @app.get("/simulation-paths")
 def get_simulation_paths():
@@ -81,13 +58,10 @@ def get_simulation_paths():
 # ... (các import cũ giữ nguyên)
 
 @app.get("/volatility-analysis")
-def get_volatility_analysis():
-    """API trả về dữ liệu phân tích biến động theo giờ"""
-    try:
-        data = feed.get_historical_volatility(days=30)
-        return data # Trả về list: [{'hour': 0, 'volatility': 0.5}, ...]
-    except Exception as e:
-        return {"error": str(e)}
+def volatility_analysis(tf: str = "1h"):
+    # Logic tương tự, bạn cần sửa cả hàm get_historical_volatility trong feed để nhận tf
+    # Nhưng tạm thời để 1h cho cái này cũng được vì nó là thống kê dài hạn.
+    return feed.get_historical_volatility(days=30)
         
 @app.get("/trade-logs")
 def get_trade_logs():

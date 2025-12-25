@@ -55,45 +55,51 @@ class BinanceFeed:
             print(f"❌ Lỗi: {e}")
             return {}
 
-    def get_market_snapshot(self):
-        """
-        Lấy dữ liệu thị trường tươi sống: Giá, Volatility (ATR), Trend
-        """
+    # Tìm hàm này và sửa dòng đầu tiên (thêm tham số timeframe)
+    def get_market_snapshot(self, timeframe='1h'): # <--- THÊM timeframe
         try:
-            # 1. Lấy nến lịch sử (OHLCV) - Lấy 50 nến gần nhất
-            ohlcv = self.exchange.fetch_ohlcv(self.symbol, self.timeframe, limit=50)
-            
-            if not ohlcv:
-                return None
+            # Lấy nến theo đúng timeframe người dùng chọn
+            ohlcv = self.exchange.fetch_ohlcv(self.symbol, timeframe, limit=100)
+            if not ohlcv: return None
 
-            # 2. Chuyển sang DataFrame để tính toán
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             
-            # 3. Tính Volatility (ATR - Average True Range)
-            # Công thức đơn giản hóa: Trung bình (High - Low) của 14 nến
-            df['tr'] = df['high'] - df['low']
-            atr = df['tr'].rolling(window=14).mean().iloc[-1]
-            
-            # 4. Tính Trend Bias (Dòng tiền)
-            # Đơn giản: Giá đóng cửa so với MA20 (Bollinger Middle)
-            ma20 = df['close'].rolling(window=20).mean().iloc[-1]
+            # --- TÍNH TOÁN CÁC CHỈ SỐ THEO TIMEFRAME ĐÓ ---
             current_price = df['close'].iloc[-1]
             
-            # Bias dương nếu giá > MA20, âm nếu < MA20
-            # Chuẩn hóa về dạng % (ví dụ 0.001 là 0.1%)
-            bias = (current_price - ma20) / ma20 
+            # 1. Tính ATR (Biến động)
+            df['tr0'] = abs(df['high'] - df['low'])
+            df['tr1'] = abs(df['high'] - df['close'].shift())
+            df['tr2'] = abs(df['low'] - df['close'].shift())
+            df['tr'] = df[['tr0', 'tr1', 'tr2']].max(axis=1)
+            atr = df['tr'].rolling(14).mean().iloc[-1]
 
+            # 2. Tính Volume Power (Cho khung nhỏ như 3m, 5m)
+            # Nếu Volume hiện tại > Trung bình 20 cây nến trước => Cá mập vào hàng
+            vol_ma = df['volume'].rolling(20).mean().iloc[-1]
+            current_vol = df['volume'].iloc[-1]
+            vol_power = (current_vol / vol_ma) * 100 # >100% là volume mạnh
+
+            # 3. Tính Xu hướng (Trend)
+            sma_fast = df['close'].rolling(7).mean().iloc[-1] # Nhanh hơn cho scalping
+            sma_slow = df['close'].rolling(25).mean().iloc[-1]
+            trend = "UP" if sma_fast > sma_slow else "DOWN"
+
+            # 4. Tính Winrate (AI Confidence) - Càng nhiều Volume càng uy tín
+            base_winrate = 50
+            if trend == "UP": base_winrate += 10
+            if vol_power > 120: base_winrate += 15 # Volume đột biến cộng thêm điểm
+            
             return {
                 "symbol": self.symbol,
                 "price": current_price,
-                "volatility": atr / current_price, # ATR dạng %
-                "atr_value": atr,
-                "bias": bias,
-                "trend": "UP" if bias > 0 else "DOWN"
+                "atr": atr,
+                "trend": trend,
+                "winrate": min(base_winrate, 99), # Max 99%
+                "volume_power": round(vol_power, 2) # Trả về thêm chỉ số Volume
             }
-
         except Exception as e:
-            print(Fore.RED + f"❌ Lỗi Data Feed: {e}")
+            print(f"Error: {e}")
             return None
 
 # --- TEST MODULE ---
