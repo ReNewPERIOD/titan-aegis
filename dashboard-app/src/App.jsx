@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, CartesianGrid } from 'recharts';
-import { Activity, TrendingUp, TrendingDown, Zap, Shield, AlertTriangle } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Zap, Shield, AlertTriangle, BarChart2 } from 'lucide-react';
 import './App.css';
 
 const API_URL = 'https://titan-backend-rl21.onrender.com';
@@ -14,32 +14,57 @@ function App() {
   const [volatilityData, setVolatilityData] = useState({ chart: [], stats: null });
   const [aiThoughts, setAiThoughts] = useState([]);
 
-  // --- STATE MỚI: STRATEGY PLANNER ---
-  const [capital, setCapital] = useState(50);     // Vốn
-  const [target, setTarget] = useState(10);       // Mục tiêu lãi ($)
-  const [trades, setTrades] = useState(5);        // Số lệnh dự kiến
-  const [leverage, setLeverage] = useState(1);    // Đòn bẩy tính toán
+  // --- 1. STATE QUẢN LÝ TIMEFRAME ---
+  const [timeframe, setTimeframe] = useState('15m'); // Mặc định 15 phút
+
+  // --- 2. STATE QUẢN LÝ CHIẾN THUẬT (STRATEGY) ---
+  const [capital, setCapital] = useState(1000);   // Vốn ($)
+  const [target, setTarget] = useState(50);       // Mục tiêu lãi ($)
+  const [trades, setTrades] = useState(5);        // Số lệnh muốn đi
+  const [leverage, setLeverage] = useState(1);    // Đòn bẩy (Tự tính)
+  const [entrySize, setEntrySize] = useState(0);  // Volume đi lệnh
   
   // Toggles
   const [trailing, setTrailing] = useState(true);
   const [hedge, setHedge] = useState(false);
   const [compound, setCompound] = useState(false);
 
-  // Tự động tính toán Plan khi nhập liệu thay đổi
+  // --- LOGIC TÍNH TOÁN CHIẾN THUẬT (AI CALCULATOR) ---
   useEffect(() => {
-    // Logic đơn giản: (Target / Vốn) / Số lệnh = % Lãi cần mỗi lệnh
-    // Đòn bẩy = % Lãi cần / (Biến động trung bình ~0.5%)
-    const requiredRoi = (target / capital) * 100;
-    const roiPerTrade = requiredRoi / trades;
-    const estLev = Math.ceil(roiPerTrade / 0.6); // Giả sử nến 15m biến động 0.6%
-    setLeverage(estLev < 1 ? 1 : (estLev > 125 ? 125 : estLev));
-  }, [capital, target, trades]);
+    // Công thức: Để đạt Target $50 với Vốn $1000 trong 5 lệnh:
+    // Mỗi lệnh cần lãi: (Target / Số lệnh) = $10
+    // % Lãi trên Vốn mỗi lệnh: ($10 / ($1000/5)) * 100
+    
+    const sizePerTrade = capital / trades; // Vốn chia cho mỗi lệnh (ví dụ $200)
+    const requiredProfit = target / trades; // Lãi cần mỗi lệnh (ví dụ $10)
+    const requiredRoi = (requiredProfit / sizePerTrade) * 100; // % ROI cần đạt (ví dụ 5%)
 
+    // Ước lượng biến động giá (ATR %) tùy theo khung giờ
+    let atrPercent = 0.5; // Mặc định 15m
+    if (timeframe === '3m') atrPercent = 0.15;
+    if (timeframe === '5m') atrPercent = 0.25;
+    if (timeframe === '1h') atrPercent = 0.8;
+    if (timeframe === '4h') atrPercent = 1.5;
 
+    // Tính đòn bẩy cần thiết: ROI Cần / Biến động nến
+    // Ví dụ: Cần lãi 5%, nến chạy 0.5% -> Cần đòn bẩy x10
+    let estLev = Math.ceil(requiredRoi / atrPercent);
+    
+    // Giới hạn đòn bẩy an toàn
+    if (estLev < 1) estLev = 1;
+    if (estLev > 125) estLev = 125;
+
+    setLeverage(estLev);
+    setEntrySize(sizePerTrade);
+
+  }, [capital, target, trades, timeframe]); // Tự tính lại khi nhập số liệu
+
+  // --- FETCH DATA TỪ SERVER ---
   const fetchData = async () => {
     try {
+      // QUAN TRỌNG: Gửi tham số ?tf=... lên server để lấy đúng nến
       const [marketRes, simRes, logsRes, volRes] = await Promise.all([
-        axios.get(`${API_URL}/market-data`),
+        axios.get(`${API_URL}/market-data?tf=${timeframe}`), 
         axios.get(`${API_URL}/simulation-paths`),
         axios.get(`${API_URL}/trade-logs`),
         axios.get(`${API_URL}/volatility-analysis`)
@@ -57,7 +82,6 @@ function App() {
         setSimPaths(formattedPaths);
       }
       setLogs(logsRes.data);
-      
       if (volRes.data && volRes.data.stats) {
         setVolatilityData(volRes.data);
       }
@@ -68,20 +92,22 @@ function App() {
     }
   };
 
+  // Gọi API mỗi khi đổi Timeframe hoặc mỗi 3 giây
   useEffect(() => {
+    setLoading(true); // Hiệu ứng load lại dữ liệu
     fetchData();
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [timeframe]); // <--- Key change: Chạy lại khi 'timeframe' đổi
 
+  // Giả lập AI chạy chữ
   useEffect(() => {
     const messages = [
-      "Scanning market microstructure...", "Analyzing volume delta divergence...",
-      "Calculated Fibonacci retracement at 0.618", "Checking correlation with SPX500...",
-      "Whale wallet movement detected...", "Sentiment analysis: NEUTRAL-BULLISH",
-      "Optimizing stop-loss parameters...", "Fetching latest funding rates...",
-      "Resistance detected at $88,500", "Executing Monte Carlo simulation (n=1000)...",
-      "Order book imbalance detected on Binance..."
+      "Scanning market microstructure...", "Analyzing volume delta...",
+      "Calculated Fibonacci 0.618...", "Whale wallet movement detected...",
+      "Sentiment analysis: NEUTRAL-BULLISH", "Optimizing stop-loss...",
+      "Fetching funding rates...", "Resistance detected at $88,500",
+      "Executing Monte Carlo (n=1000)...", "Order book imbalance..."
     ];
     const interval = setInterval(() => {
       const randomMsg = messages[Math.floor(Math.random() * messages.length)];
@@ -94,7 +120,7 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  if (loading) return <div className="loading-screen">CONNECTING TO TITAN SERVER...</div>;
+  if (loading && !market) return <div className="loading-screen">SYNCING DATA STREAM ({timeframe})...</div>;
 
   return (
     <div className="dashboard-container">
@@ -106,18 +132,28 @@ function App() {
         
         {/* Market Config */}
         <div>
-          <h2>Market Config</h2>
+          <h2>Market Data Feed</h2>
           <div className="control-group">
-            <label className="label">Timeframe</label>
-            <select className="control-input"><option>15 Minute</option><option>1 Hour</option></select>
+            <label className="label">Active Timeframe</label>
+            {/* SELECTOR MỚI: Đa dạng khung giờ */}
+            <select className="control-input" value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
+              <option value="3m">⚡ 3 Minute (Scalp)</option>
+              <option value="5m">⚡ 5 Minute (Scalp)</option>
+              <option value="15m">⏱ 15 Minute (Day)</option>
+              <option value="1h">⏱ 1 Hour (Swing)</option>
+              <option value="4h">🌊 4 Hour (Trend)</option>
+            </select>
           </div>
-          <div className="control-group" style={{marginTop:10}}>
-            <label className="label">Volatility Method</label>
-            <select className="control-input"><option>ATR (Standard)</option><option>Bollinger Band</option></select>
+          <div className="control-group" style={{marginTop:15}}>
+             <div className="plan-result" style={{borderColor: '#333'}}>
+                <div className="plan-row" style={{justifyContent:'center', color:'#888', fontSize: 10}}>
+                   MODE: {timeframe === '3m' || timeframe === '5m' ? "HIGH FREQUENCY" : "TREND FOLLOWING"}
+                </div>
+             </div>
           </div>
         </div>
 
-        {/* --- PHẦN MỚI: STRATEGY CORE --- */}
+        {/* --- STRATEGY CORE --- */}
         <div>
           <h2>Strategy Core</h2>
           <div className="strategy-form">
@@ -133,28 +169,28 @@ function App() {
             </div>
 
             <div className="input-group">
-              <label>Est. Trades</label>
+              <label>Est. Trades / Session</label>
               <input type="range" min="1" max="20" value={trades} onChange={e => setTrades(Number(e.target.value))} />
-              <div style={{textAlign:'right', fontSize:10, color:'#888'}}>{trades} trades per session</div>
+              <div style={{textAlign:'right', fontSize:10, color:'#888'}}>{trades} trades</div>
             </div>
 
             {/* Toggles */}
             <div className="toggle-row">
-              <span>Trailing SL (Auto)</span>
+              <span>Trailing SL</span>
               <label className="switch">
                 <input type="checkbox" checked={trailing} onChange={() => setTrailing(!trailing)} />
                 <span className="slider round"></span>
               </label>
             </div>
             <div className="toggle-row">
-              <span>Hedge Mode (Safe)</span>
+              <span>Hedge Mode</span>
               <label className="switch">
                 <input type="checkbox" checked={hedge} onChange={() => setHedge(!hedge)} />
                 <span className="slider round"></span>
               </label>
             </div>
             <div className="toggle-row">
-              <span>Compound (Risky)</span>
+              <span>Compound</span>
               <label className="switch">
                 <input type="checkbox" checked={compound} onChange={() => setCompound(!compound)} />
                 <span className="slider round"></span>
@@ -163,16 +199,17 @@ function App() {
 
             {/* KẾT QUẢ TÍNH TOÁN CỦA AI */}
             <div className="plan-result">
-               <div className="plan-row"><span>Rec. Leverage:</span> <span className="plan-val">{leverage}x</span></div>
-               <div className="plan-row"><span>Entry Size:</span> <span className="plan-val">${(capital * leverage / trades).toFixed(0)}</span></div>
+               <div className="plan-row"><span>Rec. Leverage:</span> <span className="plan-val text-yellow">{leverage}x</span></div>
+               <div className="plan-row"><span>Entry Size:</span> <span className="plan-val">${entrySize.toFixed(0)}</span></div>
                <div className="plan-row"><span>Risk / Trade:</span> <span className="plan-val text-red">${(capital * 0.02).toFixed(2)}</span></div>
             </div>
-
-            {/* PROGRESS BAR */}
-            <div className="target-progress">
+            
+            {/* Thanh tiến trình mục tiêu */}
+             <div className="target-progress">
               <div className="progress-label"><span>SESSION GOAL</span> <span>$0 / ${target}</span></div>
-              <div className="p-bar-bg"><div className="p-bar-fill" style={{width: '5%'}}></div></div>
+              <div className="p-bar-bg"><div className="p-bar-fill" style={{width: '2%'}}></div></div>
             </div>
+
           </div>
         </div>
       </aside>
@@ -184,7 +221,7 @@ function App() {
             <Shield className="logo-icon" size={28} />
             <div><h1>TITAN AEGIS <span style={{color:'var(--neon-yellow)'}}>V7</span></h1></div>
           </div>
-          <div className="status-badge online"><div className="dot"></div> SYSTEM ONLINE</div>
+          <div className="status-badge online"><div className="dot"></div> SYNCED: {timeframe.toUpperCase()}</div>
         </header>
 
         {market && (
@@ -219,7 +256,7 @@ function App() {
 
         <div className="main-layout">
           <div className="panel chart-panel">
-            <div className="panel-header"><Zap size={18} color="#ffd700"/> THE ORACLE PREDICTION</div>
+            <div className="panel-header"><Zap size={18} color="#ffd700"/> PRICE SIMULATION ({timeframe})</div>
             <div className="chart-container">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={simPaths}>
@@ -257,7 +294,7 @@ function App() {
         </div>
 
         <div className="panel" style={{marginTop: '15px', height: '250px', flexShrink: 0}}>
-          <div className="panel-header"><Activity size={18} /> MARKET VOLATILITY BY HOUR (UTC)</div>
+          <div className="panel-header"><BarChart2 size={18} /> MARKET STRUCTURE ANALYSIS</div>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
             <BarChart data={volatilityData.chart || []}>
@@ -276,7 +313,7 @@ function App() {
       {/* --- CỘT 3: RIGHT SIDEBAR --- */}
       <aside className="right-sidebar">
         <div className="right-panel" style={{flex: 2}}>
-          <div className="terminal-header"><span>⚡ TITAN CORTEX AI</span><span style={{fontSize: 10, color: '#666'}}>v7.0.1</span></div>
+          <div className="terminal-header"><span>⚡ TITAN CORTEX AI</span><span style={{fontSize: 10, color: '#666'}}>v7.1</span></div>
           <div className="terminal-content">
             {aiThoughts.map((log, i) => (
               <div key={i} className={`ai-log ${log.type}`}><span style={{opacity:0.5, fontSize:10, marginRight:5}}>[{log.time}]</span>{log.msg}</div>
@@ -284,16 +321,16 @@ function App() {
           </div>
         </div>
         <div className="right-panel" style={{flex: 1, borderTop: '1px solid #333'}}>
-           <div className="terminal-header"><span>🌊 MARKET DEPTH</span></div>
+           <div className="terminal-header"><span>🌊 ORDER FLOW</span></div>
           <div className="order-book">
-             <div className="ob-row"><span className="ask">87,240.00</span> <span>0.45 BTC</span></div>
+             <div className="ob-row"><span className="ask">87,240.00</span> <span>0.45</span></div>
              <div className="ob-bar"><div className="ob-fill" style={{width: '40%', background: '#ff003c'}}></div></div>
-             <div className="ob-row"><span className="ask">87,235.50</span> <span>1.20 BTC</span></div>
+             <div className="ob-row"><span className="ask">87,235.50</span> <span>1.20</span></div>
              <div className="ob-bar"><div className="ob-fill" style={{width: '80%', background: '#ff003c'}}></div></div>
              <div style={{margin: '10px 0', textAlign:'center', color:'#888', fontSize:10}}>--- SPREAD ---</div>
-             <div className="ob-row"><span className="bid">87,230.00</span> <span>2.50 BTC</span></div>
+             <div className="ob-row"><span className="bid">87,230.00</span> <span>2.50</span></div>
              <div className="ob-bar"><div className="ob-fill" style={{width: '90%', background: '#00ff41'}}></div></div>
-             <div className="ob-row"><span className="bid">87,225.00</span> <span>0.80 BTC</span></div>
+             <div className="ob-row"><span className="bid">87,225.00</span> <span>0.80</span></div>
              <div className="ob-bar"><div className="ob-fill" style={{width: '30%', background: '#00ff41'}}></div></div>
           </div>
         </div>
