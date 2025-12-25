@@ -15,6 +15,7 @@ class BinanceFeed:
         Lấy dữ liệu thị trường real-time theo khung giờ (3m, 15m, 1h...)
         """
         try:
+            print(f"📡 API Called: Fetching Binance Data for Timeframe: [{timeframe}]")
             # 1. Lấy nến
             limit = 50 
             ohlcv = self.exchange.fetch_ohlcv(self.symbol, timeframe, limit=limit)

@@ -36,27 +36,30 @@ def market_data(tf: str = "15m"):
     return feed.get_market_snapshot(timeframe=tf)
 
 @app.get("/simulation-paths")
+@app.get("/simulation-paths")
 def get_simulation_paths():
-    """Trả về dữ liệu vẽ biểu đồ Monte Carlo"""
-    # Lấy dữ liệu hiện tại
-    data = feed.get_market_snapshot()
+    # 1. Lấy dữ liệu snapshot hiện tại (đã bao gồm trend, atr từ feed)
+    # Lưu ý: Simulation nên lấy theo khung giờ mặc định hoặc khung giờ active (cần logic phức tạp hơn chút để đồng bộ hoàn hảo, nhưng tạm thời lấy snapshot mới nhất)
+    data = feed.get_market_snapshot(timeframe="15m") # Tạm thời fix cứng hoặc bạn truyền tf vào đây
     if not data: return {"error": "No Data"}
     
-    # --- LOGIC MONTE CARLO ĐƠN GIẢN HÓA ---
-    # Vì BinanceFeed trả về 'atr' và 'trend', ta phải chuyển đổi để vẽ chart
-    
     current_price = data['price']
-    volatility_pct = data['atr'] / current_price # Chuyển ATR sang % biến động
     
-    # Tạo Bias (Xu hướng) giả lập dựa trên Trend
-    drift = 0.0005 if data['trend'] == 'UP' else -0.0005
+    # --- LOGIC MỚI: Tăng độ nhạy của biểu đồ ---
+    # Chuyển đổi ATR sang % biến động. 
+    # Nhân 2 lên để biểu đồ nhìn "sóng gió" hơn cho users thấy rõ
+    volatility_pct = (data['atr'] / current_price) * 2 
+    
+    # Tạo độ dốc (Drift) dựa trên Trend
+    # Nếu UP: dốc lên. Nếu DOWN: dốc xuống.
+    trend_factor = 0.002 if data['trend'] == 'UP' else -0.002
     
     steps = 60
     paths = 50 
     
-    # Tạo ngẫu nhiên các đường đi giá
-    # Công thức: Giá * (1 + (Drift + Biến động * Random))
-    random_shocks = np.random.normal(drift, volatility_pct / 5, (steps, paths))
+    # Công thức Monte Carlo có tính đến Trend (Drift)
+    # Drift (Xu hướng) + Shock (Biến động ngẫu nhiên)
+    random_shocks = np.random.normal(trend_factor, volatility_pct, (steps, paths))
     price_paths = current_price * (1 + random_shocks).cumprod(axis=0)
     
     return {
