@@ -69,8 +69,10 @@ function App() {
   }, [capital, target, trades, timeframe]);
 
   // --- DATA FETCHING ---
+  // --- FETCH DATA ---
   const fetchData = async () => {
     try {
+      // Gọi API...
       const [marketRes, simRes, logsRes, volRes, indRes] = await Promise.all([
         axios.get(`${API_URL}/market-data?tf=${timeframe}`), 
         axios.get(`${API_URL}/simulation-paths?tf=${timeframe}`),
@@ -79,6 +81,7 @@ function App() {
         axios.get(`${API_URL}/technical-indicators?tf=${timeframe}`)
       ]);
 
+      // Set dữ liệu...
       setMarket(marketRes.data);
       if (simRes.data.paths) {
         const formattedPaths = simRes.data.paths[0].map((_, index) => {
@@ -93,14 +96,20 @@ function App() {
       if (volRes.data && volRes.data.stats) setVolatilityData(volRes.data);
       if (indRes.data) setIndicators(indRes.data);
 
-      setLoading(false);
-    } catch (err) { console.error("Error:", err); }
+    } catch (err) { 
+      console.error("Lỗi kết nối:", err); 
+      // Không làm gì cả để giữ nguyên dữ liệu cũ trên màn hình
+    } finally {
+      // QUAN TRỌNG: Luôn tắt Loading dù thành công hay thất bại
+      setLoading(false); 
+    }
   };
 
   useEffect(() => {
     setLoading(true);
     fetchData();
-    const interval = setInterval(fetchData, 3000);
+    // QUAN TRỌNG: Tăng lên 10000ms (10 giây) để giảm tải cho Server Render Free
+    const interval = setInterval(fetchData, 10000); 
     return () => clearInterval(interval);
   }, [timeframe]);
 
