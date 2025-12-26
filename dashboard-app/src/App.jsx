@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-// Import thêm Area, AreaChart, ComposedChart
-import { LineChart, Line, BarChart, Bar, AreaChart, Area, ComposedChart, Cell, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, CartesianGrid } from 'recharts';
-import { Activity, TrendingUp, TrendingDown, Zap, Shield, AlertTriangle, BarChart2, AlertOctagon } from 'lucide-react';
+// Charting Libraries
+import { LineChart, Line, Bar, ComposedChart, Cell, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, AreaChart, Area } from 'recharts';
+import { createChart, ColorType } from 'lightweight-charts';
+// Icons
+import { Activity, Zap, Shield, AlertTriangle, BarChart2, AlertOctagon } from 'lucide-react';
 import './App.css';
 
 const API_URL = 'https://titan-backend-rl21.onrender.com';
@@ -14,15 +16,18 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [volatilityData, setVolatilityData] = useState({ chart: [], stats: null });
   const [aiThoughts, setAiThoughts] = useState([]);
-  
-  // STATE MỚI
-  const [indicators, setIndicators] = useState([]); // Chứa dữ liệu RSI/MACD
-  const [dangerLevel, setDangerLevel] = useState('SAFE'); // SAFE | WARNING | CRITICAL
+  const [indicators, setIndicators] = useState([]); 
+  const [dangerLevel, setDangerLevel] = useState('SAFE');
 
-  // STATE CONFIG
+  // Refs for Lightweight Chart
+  const chartContainerRef = useRef();
+  const chartRef = useRef(); // Store chart instance
+  const candlestickSeriesRef = useRef(); // Store series instance
+
+  // Config States
   const [timeframe, setTimeframe] = useState('15m');
   const [capital, setCapital] = useState(1000);
-  const [target, setTarget] = useState(50);
+  const [target, setTarget] = useState(500);
   const [trades, setTrades] = useState(5);
   const [leverage, setLeverage] = useState(1);
   const [entrySize, setEntrySize] = useState(0);
@@ -31,7 +36,7 @@ function App() {
   const [hedge, setHedge] = useState(false);
   const [compound, setCompound] = useState(false);
 
-  // --- LOGIC CHIẾN THUẬT & CẢNH BÁO RỦI RO ---
+  // --- STRATEGY & RISK LOGIC ---
   useEffect(() => {
     const sizePerTrade = capital / trades; 
     const requiredProfit = target / trades;
@@ -50,26 +55,20 @@ function App() {
     setLeverage(estLev);
     setEntrySize(sizePerTrade);
 
-    // LOGIC CẢNH BÁO:
-    // Tổng vị thế = Vốn vào lệnh * Đòn bẩy
     const positionSize = sizePerTrade * estLev;
-    // Risk = 2% tổng vốn (Tiêu chuẩn)
     const riskAmount = capital * 0.02; 
-    // Khoảng cách giá chịu đựng được trước khi mất 2% vốn tổng
     const safeBuffer = (riskAmount / positionSize) * 100;
 
-    // Phân loại rủi ro
     if (estLev >= 50 || safeBuffer < 0.3) {
-        setDangerLevel("CRITICAL"); // Nguy hiểm: Đòn bẩy quá to hoặc SL quá mỏng
+        setDangerLevel("CRITICAL");
     } else if (estLev >= 20 || safeBuffer < 0.8) {
         setDangerLevel("WARNING");
     } else {
         setDangerLevel("SAFE");
     }
-
   }, [capital, target, trades, timeframe]);
 
-  // --- FETCH DATA ---
+  // --- DATA FETCHING ---
   const fetchData = async () => {
     try {
       const [marketRes, simRes, logsRes, volRes, indRes] = await Promise.all([
@@ -77,7 +76,7 @@ function App() {
         axios.get(`${API_URL}/simulation-paths?tf=${timeframe}`),
         axios.get(`${API_URL}/trade-logs`),
         axios.get(`${API_URL}/volatility-analysis`),
-        axios.get(`${API_URL}/technical-indicators?tf=${timeframe}`) // Gọi API mới
+        axios.get(`${API_URL}/technical-indicators?tf=${timeframe}`)
       ]);
 
       setMarket(marketRes.data);
@@ -92,7 +91,7 @@ function App() {
       }
       setLogs(logsRes.data);
       if (volRes.data && volRes.data.stats) setVolatilityData(volRes.data);
-      if (indRes.data) setIndicators(indRes.data); // Lưu dữ liệu chỉ báo
+      if (indRes.data) setIndicators(indRes.data);
 
       setLoading(false);
     } catch (err) { console.error("Error:", err); }
@@ -105,6 +104,80 @@ function App() {
     return () => clearInterval(interval);
   }, [timeframe]);
 
+  // --- LIGHTWEIGHT CHART INIT & UPDATE ---
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+
+    // Initialize chart only once
+    if (!chartRef.current) {
+      const chart = createChart(chartContainerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: '#14151a' },
+          textColor: '#94a3b8',
+        },
+        grid: {
+          vertLines: { color: '#262626' },
+          horzLines: { color: '#262626' },
+        },
+        width: chartContainerRef.current.clientWidth,
+        height: chartContainerRef.current.clientHeight,
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          borderColor: '#262626',
+        },
+        rightPriceScale: {
+          borderColor: '#262626',
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.1,
+          },
+        },
+      });
+
+      const series = chart.addCandlestickSeries({
+        upColor: '#00ff41',
+        downColor: '#ff003c',
+        borderVisible: false,
+        wickUpColor: '#00ff41',
+        wickDownColor: '#ff003c',
+      });
+
+      chartRef.current = chart;
+      candlestickSeriesRef.current = series;
+
+      const handleResize = () => {
+        if (chartContainerRef.current) {
+          chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight });
+        }
+      };
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        chart.remove();
+        chartRef.current = null;
+      };
+    }
+  }, []);
+
+  // Update chart data when indicators change
+  useEffect(() => {
+    if (candlestickSeriesRef.current && indicators.length > 0) {
+      const chartData = indicators.map(item => ({
+        time: item.timestamp / 1000, 
+        open: item.open,
+        high: item.high,
+        low: item.low,
+        close: item.close,
+      }));
+      candlestickSeriesRef.current.setData(chartData);
+      chartRef.current.timeScale().fitContent(); // Auto zoom to fit data
+    }
+  }, [indicators]);
+
+
+  // AI Thoughts
   useEffect(() => {
     const messages = ["Scanning market...", "Analyzing volume...", "Calculated Fibonacci 0.618...", "Whale detected...", "Sentiment: BULLISH", "Optimizing SL..."];
     const interval = setInterval(() => {
@@ -119,7 +192,7 @@ function App() {
 
   return (
     <div className="dashboard-container">
-      {/* SIDEBAR */}
+      {/* SIDEBAR - CONFIG */}
       <aside className="sidebar">
         <div className="logo-section"><Shield color="#00ff41"/> <span>TITAN OS</span></div>
         
@@ -153,7 +226,7 @@ function App() {
             <div className="toggle-row"><span>Trailing SL</span><label className="switch"><input type="checkbox" checked={trailing} onChange={() => setTrailing(!trailing)} /><span className="slider round"></span></label></div>
             <div className="toggle-row"><span>Hedge Mode</span><label className="switch"><input type="checkbox" checked={hedge} onChange={() => setHedge(!hedge)} /><span className="slider round"></span></label></div>
 
-            {/* CẢNH BÁO RỦI RO & KẾT QUẢ */}
+            {/* RESULTS & ALERTS */}
             <div className={`plan-result ${dangerLevel === 'CRITICAL' ? 'blink-border' : ''}`} 
                  style={{borderColor: dangerLevel === 'CRITICAL' ? '#ff003c' : (dangerLevel === 'WARNING' ? '#facc15' : '#4ade80')}}>
                
@@ -166,7 +239,6 @@ function App() {
                <div className="plan-row"><span>Rec. Leverage:</span> <span className={`plan-val ${dangerLevel === 'CRITICAL' ? 'text-red' : 'text-yellow'}`}>{leverage}x</span></div>
                <div className="plan-row"><span>Entry Size:</span> <span className="plan-val">${entrySize.toFixed(0)}</span></div>
                
-               {/* SAFE BUFFER: Khoảng cách giá chạy bao nhiêu % thì dính SL */}
                <div className="plan-row" style={{marginTop:5, borderTop:'1px dashed #333', paddingTop:5}}>
                   <span style={{color:'#888'}}>Safe Buffer:</span> 
                   <span className="plan-val" style={{color: dangerLevel === 'CRITICAL' ? '#ff003c' : '#fff'}}>
@@ -183,7 +255,7 @@ function App() {
         </div>
       </aside>
       
-      {/* CONTENT AREA */}
+      {/* MAIN CONTENT AREA */}
       <main className="content-area">
         <header className="header">
           <div className="logo-section"><Shield className="logo-icon" size={28} /><div><h1>TITAN AEGIS <span style={{color:'var(--neon-yellow)'}}>V7</span></h1></div></div>
@@ -201,7 +273,7 @@ function App() {
         )}
 
         <div className="main-layout">
-          {/* CỘT TRÁI: BIỂU ĐỒ ORACLE */}
+          {/* LEFT: ORACLE CHART */}
           <div className="panel chart-panel">
             <div className="panel-header"><Zap size={18} color="#ffd700"/> PRICE SIMULATION ({timeframe})</div>
             <div className="chart-container">
@@ -216,11 +288,11 @@ function App() {
             </div>
           </div>
 
-          {/* CỘT PHẢI: LOGS + MINI INDICATORS */}
-          <div style={{display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0}}>
+          {/* RIGHT: LOGS & INDICATORS */}
+          <div style={{display: 'flex', flexDirection: 'column', gap: '15px', minWidth: 0, flex: 1}}>
               
               {/* 1. EXECUTION LOGS */}
-              <div className="panel" style={{flex: 1, minHeight: '180px'}}>
+              <div className="panel" style={{flex: 1, minHeight: '150px'}}>
                 <div className="panel-header"><AlertTriangle size={18} /> EXECUTION LOGS</div>
                 <div className="logs-list">
                   <table>
@@ -239,78 +311,37 @@ function App() {
                 </div>
               </div>
 
-              {/* 2. TECHNICAL INDICATORS (MỚI) */}
-              <div className="panel" style={{height: '260px', display: 'flex', flexDirection: 'column'}}>
-                <div className="panel-header" style={{fontSize: 10, padding: '8px 15px'}}>
-                   <Activity size={14} color="#38bdf8"/> TECHNICALS (RSI + MACD)
-                </div>
-                
-                {/* Chart 1: Giá */}
+              {/* 2. TECHNICAL INDICATORS (RSI/MACD) */}
+              <div className="panel" style={{height: '240px', display: 'flex', flexDirection: 'column'}}>
+                <div className="panel-header" style={{fontSize: 10, padding: '8px 15px'}}><Activity size={14} color="#38bdf8"/> TECHNICALS (RSI + MACD)</div>
                 <div style={{flex: 2, borderBottom: '1px solid #222', padding: '5px'}}>
-                   <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={indicators}>
-                         <defs><linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8884d8" stopOpacity={0.3}/><stop offset="95%" stopColor="#8884d8" stopOpacity={0}/></linearGradient></defs>
-                         <YAxis domain={['auto', 'auto']} hide />
-                         <Tooltip contentStyle={{background:'#000', border:'none', fontSize:10}} itemStyle={{padding:0}} labelStyle={{display:'none'}}/>
-                         <Area type="monotone" dataKey="close" stroke="#8884d8" fillOpacity={1} fill="url(#colorPrice)" strokeWidth={1.5} />
-                      </AreaChart>
-                   </ResponsiveContainer>
+                   <ResponsiveContainer width="100%" height="100%"><AreaChart data={indicators}><defs><linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8884d8" stopOpacity={0.3}/><stop offset="95%" stopColor="#8884d8" stopOpacity={0}/></linearGradient></defs><YAxis domain={['auto', 'auto']} hide /><Tooltip contentStyle={{background:'#000', border:'none', fontSize:10}} itemStyle={{padding:0}} labelStyle={{display:'none'}}/><Area type="monotone" dataKey="close" stroke="#8884d8" fillOpacity={1} fill="url(#colorPrice)" strokeWidth={1.5} /></AreaChart></ResponsiveContainer>
                 </div>
-
-                {/* Chart 2: RSI */}
                 <div style={{flex: 1, borderBottom: '1px solid #222', padding: '5px', position:'relative'}}>
                    <span style={{position:'absolute', top:2, left:5, fontSize:8, color:'#666'}}>RSI(14)</span>
-                   <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={indicators}>
-                         <YAxis domain={[0, 100]} hide />
-                         <ReferenceLine y={70} stroke="#ff003c" strokeDasharray="2 2" />
-                         <ReferenceLine y={30} stroke="#00ff41" strokeDasharray="2 2" />
-                         <Line type="monotone" dataKey="rsi" stroke="#38bdf8" dot={false} strokeWidth={1} />
-                      </LineChart>
-                   </ResponsiveContainer>
+                   <ResponsiveContainer width="100%" height="100%"><LineChart data={indicators}><YAxis domain={[0, 100]} hide /><ReferenceLine y={70} stroke="#ff003c" strokeDasharray="2 2" /><ReferenceLine y={30} stroke="#00ff41" strokeDasharray="2 2" /><Line type="monotone" dataKey="rsi" stroke="#38bdf8" dot={false} strokeWidth={1} /></LineChart></ResponsiveContainer>
                 </div>
-
-                {/* Chart 3: MACD */}
                 <div style={{flex: 1, padding: '5px', position:'relative'}}>
                    <span style={{position:'absolute', top:2, left:5, fontSize:8, color:'#666'}}>MACD</span>
-                   <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={indicators}>
-                         <YAxis hide />
-                         <Bar dataKey="macd_hist" fill="#4ade80">
-                           {indicators.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.macd_hist > 0 ? '#4ade80' : '#ff003c'} />))}
-                         </Bar>
-                         <Line type="monotone" dataKey="macd" stroke="#fff" dot={false} strokeWidth={1} />
-                         <Line type="monotone" dataKey="macd_signal" stroke="#facc15" dot={false} strokeWidth={1} />
-                      </ComposedChart>
-                   </ResponsiveContainer>
+                   <ResponsiveContainer width="100%" height="100%"><ComposedChart data={indicators}><YAxis hide /><Bar dataKey="macd_hist" fill="#4ade80">{indicators.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.macd_hist > 0 ? '#4ade80' : '#ff003c'} />))}</Bar><Line type="monotone" dataKey="macd" stroke="#fff" dot={false} strokeWidth={1} /><Line type="monotone" dataKey="macd_signal" stroke="#facc15" dot={false} strokeWidth={1} /></ComposedChart></ResponsiveContainer>
                 </div>
               </div>
           </div>
         </div>
 
-        <div className="panel" style={{marginTop: '15px', height: '250px', flexShrink: 0}}>
-           <div className="panel-header"><BarChart2 size={18} /> MARKET STRUCTURE ANALYSIS</div>
-           <div className="chart-container">
-              <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={volatilityData.chart || []}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                    <XAxis dataKey="hour" tick={{fill: '#666', fontSize: 10}} tickFormatter={(val) => `${val}h`} />
-                    <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#000', border: '1px solid #333', color: '#fff'}} />
-                    <Bar dataKey="volatility" name="Vol %">
-                       {(volatilityData.chart || []).map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.volatility > 0.5 ? '#ff003c' : '#00ff41'} />))}
-                    </Bar>
-                 </BarChart>
-              </ResponsiveContainer>
-           </div>
+        {/* --- BOTTOM PANEL: REAL-TIME CANDLESTICK CHART (NEW) --- */}
+        <div className="bottom-chart-panel">
+           <div className="panel-header"><BarChart2 size={18} /> REAL-TIME MARKET STRUCTURE ({timeframe})</div>
+           {/* Container for Lightweight Chart */}
+           <div ref={chartContainerRef} className="chart-container" style={{padding: 0, height: '100%', width: '100%'}}></div>
         </div>
       </main>
 
+      {/* RIGHT SIDEBAR - AI & ORDER BOOK */}
       <aside className="right-sidebar">
         <div className="right-panel" style={{flex: 2}}>
           <div className="terminal-header"><span>⚡ TITAN CORTEX AI</span><span style={{fontSize: 10, color: '#666'}}>v7.1</span></div>
-          <div className="terminal-content">
-            {aiThoughts.map((log, i) => (<div key={i} className={`ai-log ${log.type}`}><span style={{opacity:0.5, fontSize:10, marginRight:5}}>[{log.time}]</span>{log.msg}</div>))}
-          </div>
+          <div className="terminal-content">{aiThoughts.map((log, i) => (<div key={i} className={`ai-log ${log.type}`}><span style={{opacity:0.5, fontSize:10, marginRight:5}}>[{log.time}]</span>{log.msg}</div>))}</div>
         </div>
         <div className="right-panel" style={{flex: 1, borderTop: '1px solid #333'}}>
            <div className="terminal-header"><span>🌊 ORDER FLOW</span></div>
