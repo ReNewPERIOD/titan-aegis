@@ -266,3 +266,13 @@ input:checked + .slider:before { transform: translateX(16px); }
 .progress-label { display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8; margin-bottom: 3px; }
 .p-bar-bg { width: 100%; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
 .p-bar-fill { height: 100%; background: linear-gradient(90deg, #00ff41, #facc15); width: 0%; transition: width 0.5s; }
+@keyframes blink-red {
+  0% { border-color: #ff003c; box-shadow: 0 0 5px #ff003c; }
+  50% { border-color: transparent; box-shadow: none; }
+  100% { border-color: #ff003c; box-shadow: 0 0 5px #ff003c; }
+}
+
+.blink-border {
+  animation: blink-red 1s infinite;
+  border-width: 2px !important;
+}
